@@ -22,7 +22,11 @@ export default class LuneDataBase {
 
         let datosActualizados;
         if (Array.isArray(datosExistentes)) {
-            datosActualizados = [...datosExistentes, ...nuevosDatos];
+            if (Array.isArray(nuevosDatos)) {
+                datosActualizados = [...datosExistentes, ...nuevosDatos];
+            } else {
+                datosActualizados = [...datosExistentes, nuevosDatos];
+            }
         } else {
             datosActualizados = { ...datosExistentes, ...nuevosDatos };
         }
