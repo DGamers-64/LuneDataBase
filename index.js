@@ -1,4 +1,5 @@
 import { readFile, writeFile } from 'fs/promises';
+import { join } from 'path';
 
 export default class LuneDataBase {
     constructor(tablas = [], carpeta = './data') {
