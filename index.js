@@ -162,7 +162,7 @@ export default class LuneDataBase {
         return datosActualizados;
     }
 
-    async delete(tabla, filtro) {
+    async delete(tabla, filtro = () => true) {
         const tablaArchivo = this.getTabla(tabla);
 
         if (!tablaArchivo) {
@@ -171,13 +171,11 @@ export default class LuneDataBase {
 
         const datosExistentes = await this.get(tabla);
         const datosRestantes = datosExistentes.filter(registro => !filtro(registro));
-        const eliminados = datosExistentes.length - datosRestantes.length;
-
-        if (eliminados === 0) {
-            throw new Error(`No se encontraron registros que coincidan con el filtro en "${tabla}"`);
-        }
-
         const registrosEliminados = datosExistentes.filter(registro => filtro(registro));
+
+        if (registrosEliminados.length === 0) {
+            return datosRestantes;
+        }
 
         for (const otraTabla of this.tablas) {
             if (otraTabla.nombre === tabla) continue;
