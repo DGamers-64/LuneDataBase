@@ -161,4 +161,49 @@ export default class LuneDataBase {
         await writeFile(tablaArchivo.path, JSON.stringify(datosActualizados, null, 2), 'utf-8');
         return datosActualizados;
     }
+
+    async delete(tabla, filtro) {
+        const tablaArchivo = this.getTabla(tabla);
+
+        if (!tablaArchivo) {
+            throw new Error(`Tabla "${tabla}" no encontrada`);
+        }
+
+        const datosExistentes = await this.get(tabla);
+        const datosRestantes = datosExistentes.filter(registro => !filtro(registro));
+        const eliminados = datosExistentes.length - datosRestantes.length;
+
+        if (eliminados === 0) {
+            throw new Error(`No se encontraron registros que coincidan con el filtro en "${tabla}"`);
+        }
+
+        const registrosEliminados = datosExistentes.filter(registro => filtro(registro));
+
+        for (const otraTabla of this.tablas) {
+            if (otraTabla.nombre === tabla) continue;
+            if (!otraTabla.foreignKeys?.length) continue;
+
+            const fksHaciaEstaTabla = otraTabla.foreignKeys.filter(fk => fk.nombre === tabla);
+            if (!fksHaciaEstaTabla.length) continue;
+
+            const datosOtraTabla = await this.get(otraTabla.nombre);
+
+            for (const fk of fksHaciaEstaTabla) {
+                const valoresEliminados = new Set(registrosEliminados.map(r => r[fk.foreignField]));
+
+                const tieneReferencias = datosOtraTabla.some(
+                    registro => valoresEliminados.has(registro[fk.localField])
+                );
+
+                if (tieneReferencias) {
+                    throw new Error(
+                        `No se puede eliminar: "${otraTabla.nombre}" tiene registros que referencian "${tabla}.${fk.foreignField}"`
+                    );
+                }
+            }
+        }
+
+        await writeFile(tablaArchivo.path, JSON.stringify(datosRestantes, null, 2), 'utf-8');
+        return datosRestantes;
+    }
 }
