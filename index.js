@@ -101,4 +101,64 @@ export default class LuneDataBase {
         await writeFile(tablaArchivo.path, JSON.stringify(datosActualizados, null, 2), 'utf-8');
         return datosActualizados;
     }
+
+    async update(tabla, filtro, nuevosDatos) {
+        const tablaArchivo = this.getTabla(tabla);
+
+        if (!tablaArchivo) {
+            throw new Error(`Tabla "${tabla}" no encontrada`);
+        }
+
+        const datosExistentes = await this.get(tabla);
+        let actualizados = 0;
+
+        if (tablaArchivo.foreignKeys?.length) {
+            for (const fk of tablaArchivo.foreignKeys) {
+                if (!(fk.localField in nuevosDatos)) continue;
+
+                const tablaForanea = this.getTabla(fk.nombre);
+                if (!tablaForanea) {
+                    throw new Error(`Tabla foránea "${fk.nombre}" no encontrada`);
+                }
+
+                const datosForaneos = await this.get(fk.nombre);
+                const valoresValidos = new Set(datosForaneos.map(d => d[fk.foreignField]));
+                const valorLocal = nuevosDatos[fk.localField];
+
+                if (valorLocal == null) {
+                    if (tablaArchivo.options.foreignKeysRequired) {
+                        throw new Error(`El campo "${fk.localField}" es obligatorio en "${tabla}"`);
+                    }
+                    continue;
+                }
+
+                if (!valoresValidos.has(valorLocal)) {
+                    throw new Error(
+                        `Foreign key inválida: "${fk.localField}" con valor "${valorLocal}" no existe en "${fk.nombre}.${fk.foreignField}"`
+                    );
+                }
+            }
+        }
+
+        const datosActualizados = datosExistentes.map(registro => {
+            if (!filtro(registro)) return registro;
+
+            if (tablaArchivo.options.idUnique || tablaArchivo.options.idAutoIncrementable) {
+                const { [tablaArchivo.id]: _idIgnorado, ...restoNuevosDatos } = nuevosDatos;
+
+                actualizados++;
+                return { ...registro, ...restoNuevosDatos };
+            }
+
+            actualizados++;
+            return { ...registro, ...nuevosDatos };
+        });
+
+        if (actualizados === 0) {
+            throw new Error(`No se encontraron registros que coincidan con el filtro en "${tabla}"`);
+        }
+
+        await writeFile(tablaArchivo.path, JSON.stringify(datosActualizados, null, 2), 'utf-8');
+        return datosActualizados;
+    }
 }
