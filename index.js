@@ -337,22 +337,30 @@ export default class LuneDataBase {
 
         await this.#validateForeignKeys(tablaArchivo, nuevosArray);
 
+        let maxId = datosExistentes.length
+            ? Math.max(...datosExistentes.map(d => d[tablaArchivo.id] || 0))
+            : 0;
+
+        const idsUsados = new Set(
+            datosExistentes.map(d => d[tablaArchivo.id])
+        );
+
         const nuevosProcesados = nuevosArray.map(nuevo => {
             // Schema: defaults + validación de tipos
             nuevo = this.#validateSchema(tablaArchivo, nuevo, false);
 
             // Auto-increment
             if (tablaArchivo.options?.idAutoIncrementable && nuevo[tablaArchivo.id] == null) {
-                const maxId = datosExistentes.length
-                    ? Math.max(...datosExistentes.map(d => d[tablaArchivo.id] || 0))
-                    : 0;
-                nuevo[tablaArchivo.id] = maxId + 1;
+                maxId++;
+                nuevo[tablaArchivo.id] = maxId;
             }
 
             // Unique id
             if (tablaArchivo.options?.idUnique && nuevo[tablaArchivo.id] != null) {
-                const existe = datosExistentes.some(d => d[tablaArchivo.id] === nuevo[tablaArchivo.id]);
-                if (existe) throw new Error(`El ID ${nuevo[tablaArchivo.id]} ya existe en "${tabla}"`);
+                if (idsUsados.has(nuevo[tablaArchivo.id])) {
+                    throw new Error(`El ID ${nuevo[tablaArchivo.id]} ya existe en "${tabla}"`);
+                }
+                idsUsados.add(nuevo[tablaArchivo.id]);
             }
 
             return this.#applyTimestampCreate(tablaArchivo, nuevo);
