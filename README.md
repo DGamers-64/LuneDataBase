@@ -1,4 +1,4 @@
-# LuneDataBase
+# LuneDatabase
 
 Base de datos local ligera basada en archivos `.json`. Sin dependencias externas, con soporte completo de CRUD para registros y tablas, validación de esquemas (compatible con **LuneModels**), foreign keys, soft delete, hooks, índices en memoria y backups.
 
@@ -45,10 +45,10 @@ Base de datos local ligera basada en archivos `.json`. Sin dependencias externas
 
 ## Instalación
 
-Copia `LuneDataBase.js` a tu proyecto e impórtalo directamente. No tiene dependencias externas; solo usa el módulo nativo `fs/promises` de Node.js.
+Copia `LuneDatabase.js` a tu proyecto e impórtalo directamente. No tiene dependencias externas; solo usa el módulo nativo `fs/promises` de Node.js.
 
 ```js
-import LuneDataBase from './LuneDataBase.js'
+import LuneDatabase from './LuneDatabase.js'
 ```
 
 Para usar validaciones avanzadas en el `schema`, puedes combinarla con **LuneModels** (opcional):
@@ -64,9 +64,9 @@ import LuneModels from './LuneModels.js'
 ## Inicio rápido
 
 ```js
-import LuneDataBase from './LuneDataBase.js'
+import LuneDatabase from './LuneDatabase.js'
 
-const db = new LuneDataBase(
+const db = new LuneDatabase(
   [
     {
       nombre: 'usuarios',
@@ -529,7 +529,7 @@ await db.deleteTable('logs')
 **Debe llamarse una vez al arrancar.** Crea la carpeta de datos si no existe, genera los archivos `.json` de las tablas que no existan todavía, y construye los índices en memoria para las tablas existentes.
 
 ```js
-const db = new LuneDataBase([...], './data')
+const db = new LuneDatabase([...], './data')
 await db.init()
 ```
 
@@ -563,7 +563,7 @@ Sin `{ confirmar: true }` lanza un error de seguridad antes de hacer nada.
 ## Ejemplo completo
 
 ```js
-import LuneDataBase from './LuneDataBase.js'
+import LuneDatabase from './LuneDatabase.js'
 import LuneModels   from './LuneModels.js'
 
 // Schema completo de LuneModels definido fuera (Formato C)
@@ -571,7 +571,7 @@ const categoriaSchema = LuneModels.schema({
   nombre: LuneModels.string().required().minLength(2),
 })
 
-const db = new LuneDataBase([
+const db = new LuneDatabase([
   {
     nombre: 'categorias',
     id: 'id',

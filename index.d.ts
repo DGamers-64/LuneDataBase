@@ -3,11 +3,11 @@
  */
 export interface ForeignKey {
   /** Nombre de la tabla foránea a la que apunta */
-  nombre: string;
+  tableName: string
   /** Campo en la tabla actual que actúa como clave foránea */
-  localField: string;
+  localField: string
   /** Campo en la tabla foránea al que referencia */
-  foreignField: string;
+  foreignField: string
 }
 
 /**
@@ -15,11 +15,17 @@ export interface ForeignKey {
  */
 export interface TablaOptions {
   /** Si el ID se genera automáticamente de forma incremental */
-  idAutoIncrementable?: boolean;
+  idAutoIncrementable?: boolean
   /** Si el ID debe ser único (no permite duplicados) */
-  idUnique?: boolean;
+  idUnique?: boolean
   /** Si las foreign keys son obligatorias (no pueden ser null) */
-  foreignKeysRequired?: boolean;
+  foreignKeysRequired?: boolean
+  /** Si la tabla mantiene timestamps (createdAt y updatedAt) */
+  timestamps?: boolean
+  /** Si la tabla soporta soft delete (deletedAt) */
+  softDelete?: boolean
+  /** Si la tabla es solo lectura */
+  readonly?: boolean
 }
 
 /**
@@ -27,178 +33,114 @@ export interface TablaOptions {
  */
 export interface TablaConfig {
   /** Nombre identificador de la tabla */
-  nombre: string;
+  name: string
   /** Nombre del campo que actúa como ID (por defecto se asume "id") */
-  id?: string;
+  id?: string
   /** Claves foráneas que referencia esta tabla */
-  foreignKeys?: ForeignKey[];
+  foreignKeys?: ForeignKey[]
+  /** Campos a indexar */
+  indices?: string[]
   /** Opciones de comportamiento */
-  options?: TablaOptions;
+  options?: TablaOptions
+  /** Hooks para eventos */
+  hooks?: {
+    beforeAdd?: (payload: { table: string, datos: Record<string, any>[] }) => void | Promise<void>
+    afterAdd?: (payload: { table: string, datos: Record<string, any>[] }) => void | Promise<void>
+    beforeUpdate?: (payload: { table: string, filter: (r:any)=>boolean, newData: Record<string, any> }) => void | Promise<void>
+    afterUpdate?: (payload: { table: string, actualizados: number }) => void | Promise<void>
+    beforeDelete?: (payload: { table: string, registros: Record<string, any>[] }) => void | Promise<void>
+    afterDelete?: (payload: { table: string, registros: Record<string, any>[] }) => void | Promise<void>
+  }
 }
 
 /**
  * Definición interna de una tabla (incluye el path del archivo)
  */
-interface TablaInterna extends Required<Pick<TablaConfig, 'nombre'>> {
-  id?: string;
-  foreignKeys?: ForeignKey[];
-  options: TablaOptions;
+interface TablaInterna extends Required<Pick<TablaConfig,'name'>> {
+  id?: string
+  foreignKeys?: ForeignKey[]
+  indices?: string[]
+  options: TablaOptions
+  hooks?: TablaConfig['hooks']
   /** Ruta al archivo .json de la tabla */
-  path: string;
+  path: string
 }
 
 /**
- * ## LuneDataBase
+ * ## LuneDatabase
  * Base de datos local basada en archivos JSON con soporte de tablas,
- * foreign keys, IDs auto-incrementables y filtros.
- *
- * @example
- * ```js
- * const db = new LuneDataBase([
- *   {
- *     nombre: 'usuarios',
- *     id: 'id',
- *     options: { idAutoIncrementable: true, idUnique: true }
- *   },
- *   {
- *     nombre: 'posts',
- *     id: 'id',
- *     options: { idAutoIncrementable: true, idUnique: true },
- *     foreignKeys: [{ nombre: 'usuarios', localField: 'userId', foreignField: 'id' }]
- *   }
- * ]);
- *
- * await db.init();
- * ```
+ * foreign keys, soft delete, timestamps, índices y hooks.
  */
-export default class LuneDataBase {
-  /** Ruta a la carpeta donde se almacenan los archivos JSON */
-  carpeta: string;
-
+export default class LuneDatabase {
+  /** Carpeta donde se almacenan los archivos JSON */
+  path: string
   /** Lista de tablas registradas (con path incluido) */
-  tablas: TablaInterna[];
+  tables: TablaInterna[]
+  /** Flag de base de datos in-memory */
+  inMemory: boolean
 
-  /**
-   * Crea una nueva instancia de LuneDataBase.
-   * @param tablas - Array con la configuración de cada tabla
-   * @param carpeta - Carpeta donde se guardarán los archivos JSON (por defecto `'./data'`)
-   *
-   * @example
-   * ```js
-   * const db = new LuneDataBase([
-   *   { nombre: 'usuarios', id: 'id', options: { idAutoIncrementable: true } }
-   * ], './mi-base-de-datos');
-   * ```
-   */
-  constructor(tablas?: TablaConfig[], carpeta?: string);
+  constructor(tables?: TablaConfig[], options?: { path?: string, inMemory?: boolean })
 
-  /**
-   * Inicializa la base de datos: crea la carpeta y los archivos JSON
-   * de cada tabla si no existen.
-   *
-   * ⚠️ Debe llamarse antes de cualquier operación con la base de datos.
-   *
-   * @example
-   * ```js
-   * await db.init();
-   * ```
-   */
-  init(): Promise<void>;
+  /** Inicializa la base de datos y crea archivos/carpetas si no existen */
+  init(): Promise<void>
 
-  /**
-   * Obtiene registros de una tabla, opcionalmente filtrados.
-   *
-   * @param tabla - Nombre de la tabla a consultar
-   * @param filtro - Función de filtro (similar a `Array.filter`). Por defecto devuelve todos.
-   * @returns Array con los registros que pasan el filtro
-   *
-   * @example
-   * ```js
-   * // Todos los registros
-   * const todos = await db.get('usuarios');
-   *
-   * // Solo los activos
-   * const activos = await db.get('usuarios', u => u.activo === true);
-   * ```
-   */
-  get<T = Record<string, any>>(tabla: string, filtro?: (registro: T) => boolean): Promise<T[]>;
+  /** Devuelve todos los registros, opcionalmente filtrados */
+  get<T = Record<string, any>>(table: string, filter?: (r:T)=>boolean): Promise<T[]>
 
-  /**
-   * Agrega uno o varios registros a una tabla.
-   * Valida foreign keys e IDs únicos si están configurados.
-   *
-   * @param tabla - Nombre de la tabla destino
-   * @param nuevosDatos - Un objeto o array de objetos a insertar
-   * @returns Array completo de registros tras la inserción
-   *
-   * @example
-   * ```js
-   * // Insertar uno
-   * await db.add('usuarios', { nombre: 'Ana', activo: true });
-   *
-   * // Insertar varios
-   * await db.add('usuarios', [
-   *   { nombre: 'Luis' },
-   *   { nombre: 'María' }
-   * ]);
-   * ```
-   */
-  add<T = Record<string, any>>(tabla: string, nuevosDatos: T | T[]): Promise<T[]>;
+  /** Devuelve solo el primer registro que cumpla el filtro */
+  find<T = Record<string, any>>(table: string, filter: (r:T)=>boolean): Promise<T | undefined>
 
-  /**
-   * Actualiza los registros que coincidan con el filtro.
-   * Si la tabla tiene ID único/autoincremental, el ID no puede modificarse.
-   *
-   * @param tabla - Nombre de la tabla a actualizar
-   * @param filtro - Función que determina qué registros se actualizan
-   * @param nuevosDatos - Objeto con los campos a modificar (se hace merge)
-   * @returns Array completo de registros tras la actualización
-   *
-   * @example
-   * ```js
-   * await db.update(
-   *   'usuarios',
-   *   u => u.id === 1,
-   *   { nombre: 'Ana García', activo: false }
-   * );
-   * ```
-   */
-  update<T = Record<string, any>>(
-    tabla: string,
-    filtro: (registro: T) => boolean,
-    nuevosDatos: Partial<T>
-  ): Promise<T[]>;
+  /** Verifica si existe al menos un registro que cumpla el filtro */
+  exists<T = Record<string, any>>(table: string, filter: (r:T)=>boolean): Promise<boolean>
 
-  /**
-   * Elimina los registros que coincidan con el filtro.
-   * Lanza un error si otros registros en otras tablas referencian los que se quieren eliminar.
-   *
-   * @param tabla - Nombre de la tabla
-   * @param filtro - Función que determina qué registros se eliminan. Por defecto elimina todos.
-   * @returns Array con los registros que **no** fueron eliminados
-   *
-   * @example
-   * ```js
-   * // Eliminar por condición
-   * await db.delete('usuarios', u => u.id === 3);
-   *
-   * // Vaciar tabla completa
-   * await db.delete('usuarios');
-   * ```
-   */
-  delete<T = Record<string, any>>(tabla: string, filtro?: (registro: T) => boolean): Promise<T[]>;
+  /** Cuenta los registros que cumplen un filtro */
+  count<T = Record<string, any>>(table: string, filter?: (r:T)=>boolean): Promise<number>
 
-  /**
-   * Devuelve la configuración interna de una tabla por su nombre.
-   * Retorna `undefined` si la tabla no existe.
-   *
-   * @param tabla - Nombre de la tabla a buscar
-   *
-   * @example
-   * ```js
-   * const config = db.getTabla('usuarios');
-   * console.log(config?.path); // './data/usuarios.json'
-   * ```
-   */
-  getTabla(tabla: string): TablaInterna | undefined;
+  /** Inserta uno o varios registros en la tabla */
+  add<T = Record<string, any>>(table: string, newRecords: T | T[]): Promise<T[]>
+
+  /** Actualiza registros que cumplen un filtro */
+  update<T = Record<string, any>>(table: string, filter: (r:T)=>boolean, newData: Partial<T>): Promise<T[]>
+
+  /** Actualiza todos los registros de la tabla */
+  updateAll<T = Record<string, any>>(table: string, newData: Partial<T>): Promise<T[]>
+
+  /** Elimina registros que cumplen un filtro (soft delete si está activo) */
+  delete<T = Record<string, any>>(table: string, filter?: (r:T)=>boolean): Promise<T[]>
+
+  /** Recupera los registros soft-deleted */
+  getDeleted<T = Record<string, any>>(table: string): Promise<T[]>
+
+  /** Restaura registros eliminados */
+  restore<T = Record<string, any>>(table: string, filter: (r:T)=>boolean): Promise<T[]>
+
+  /** Limpia completamente la tabla */
+  clear(table: string): Promise<void>
+
+  /** Inserta datos solo si la tabla está vacía */
+  seed<T = Record<string, any>>(table: string, data: T | T[]): Promise<T[]>
+
+  /** Realiza un join con otra tabla */
+  join<T = Record<string, any>>(tableName: string, foreignTableName: string, localField: string, foreignField?: string, alias?: string): Promise<T[]>
+
+  /** Busca registros usando un índice */
+  findByIndex<T = Record<string, any>>(tableName: string, field: string, value: any): Promise<T[]>
+
+  /** Hace backup de todos los archivos JSON en otra carpeta */
+  backup(dest?: string): Promise<string>
+
+  /** Elimina todos los archivos y tablas registradas (destructivo) */
+  drop(options?: { confirmar?: boolean }): Promise<void>
+
+  /** Devuelve la configuración interna de una tabla */
+  getTable(tableName: string): Promise<TablaInterna>
+
+  /** Crea una nueva tabla */
+  createTable(tableConfig: TablaConfig): Promise<TablaInterna>
+
+  /** Actualiza la configuración de una tabla existente */
+  updateTable(tableName: string, config: Partial<TablaConfig>): Promise<TablaInterna>
+
+  /** Elimina una tabla (archivo + registro interno) */
+  deleteTable(tableName: string): Promise<TablaInterna>
 }
