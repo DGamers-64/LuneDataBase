@@ -26,6 +26,16 @@ export default class LuneDatabase {
         return t
     }
 
+    #project(record, fields) {
+        if (!fields?.length) return record
+
+        const res = {}
+        for (const f of fields) {
+            if (f in record) res[f] = record[f]
+        }
+        return res
+    }
+
     async #readTable(table) {
         if (this.inMemory) return this.memoryData[table.name] || []
         const raw = await readFile(table.path, 'utf-8')
@@ -136,15 +146,18 @@ export default class LuneDatabase {
         }
     }
 
-    async get(tableName, filter = () => true) {
+    async get(tableName, filter = () => true, fields = null) {
         const table = this.#requireTable(tableName)
         const data = await this.#readTable(table)
         const base = table.options?.softDelete ? data.filter(r => !r.deletedAt) : data
-        return base.filter(filter)
+
+        return base
+            .filter(filter)
+            .map(r => this.#project(r, fields))
     }
 
-    async find(tableName, filter) {
-        const results = await this.get(tableName, filter)
+    async find(tableName, filter, fields = null) {
+        const results = await this.get(tableName, filter, fields)
         return results[0]
     }
 
@@ -260,13 +273,20 @@ export default class LuneDatabase {
         return this.add(tableName, data)
     }
 
-    async join(tableName, foreignTableName, localField, foreignField = localField, alias = foreignTableName) {
+    async join(tableName, foreignTableName, localField, foreignField = localField, alias = foreignTableName, fields = null) {
         this.#requireTable(tableName)
         const foreignTable = this.#requireTable(foreignTableName)
         const data = await this.get(tableName)
         const foreignData = await this.#readTable(foreignTable)
         const map = new Map(foreignData.map(r => [r[foreignField], r]))
-        return data.map(r => ({ ...r, [alias]: map.get(r[localField]) ?? null }))
+
+        return data.map(r => {
+            const joined = {
+                ...r,
+                [alias]: map.get(r[localField]) ?? null
+            }
+            return this.#project(joined, fields)
+        })
     }
 
     async findByIndex(tableName, field, value) {
