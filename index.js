@@ -5,11 +5,11 @@ export default class LuneDatabase {
     #indices = {}
 
     constructor(tables = [], options = {}) {
-        this.tables = tables.map(t => this.#buildTableEntry(t))
         this.options = options
         this.inMemory = options.inMemory || false
         this.memoryData = {}
         this.basePath = options.path || './data'
+        this.tables = tables.map(t => this.#buildTableEntry(t))
     }
 
     #buildTableEntry(tableConfig) {
